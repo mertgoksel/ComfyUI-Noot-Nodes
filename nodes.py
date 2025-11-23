@@ -172,6 +172,7 @@ class StagedKsampler:
                                             last_step=initial_step,
                                             force_full_denoise=True,
                                             disable_noise=False)[0]
+            return (latent_image,)
             
         else:
             for i in range(iteration_count):
