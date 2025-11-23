@@ -131,6 +131,7 @@ class StagedKsampler:
         vaeencoder = VAEEncodeTiled()
         scaler = ImageScaleBy()
         cfgs = [cfg_init + i * cfg_step for i in range(iteration_count)]
+        np.random.seed(noise_seed)
 
         if upscale_percentage_init == upscale_percentage_end:
             upscales = [upscale_percentage_init for i in range(iteration_count)]
@@ -156,9 +157,8 @@ class StagedKsampler:
                     iteration_count
                 )
 
-        for i in range(iteration_count):
-            if i == 0:
-                latent_image = common_ksampler(cfg=cfg_init,
+        if iteration_count == 1:
+            latent_image = common_ksampler(cfg=cfg_init,
                                             denoise=1,
                                             latent=latent_image,
                                             positive=positive,
@@ -172,13 +172,51 @@ class StagedKsampler:
                                             last_step=initial_step,
                                             force_full_denoise=True,
                                             disable_noise=False)[0]
-                
-                image = vaedecoder.decode(vae=vae, samples=latent_image, tile_size=512)[0]
-                resized = scaler.upscale(image=image, upscale_method=upscale_method, scale_by=self.upscales[i])[0]
-                latent_image = vaeencoder.encode(vae=vae, pixels=resized, tile_size=512, overlap=64)[0]
-                continue
+            
+        else:
+            for i in range(iteration_count):
+                if i == 0:
+                    latent_image = common_ksampler(cfg=cfg_init,
+                                                denoise=1,
+                                                latent=latent_image,
+                                                positive=positive,
+                                                negative=negative,
+                                                sampler_name=initial_sampler_name,
+                                                scheduler=scheduler,
+                                                model=model,
+                                                seed=noise_seed,
+                                                steps=total_steps,
+                                                start_step=0,
+                                                last_step=initial_step,
+                                                force_full_denoise=True,
+                                                disable_noise=False)[0]
+                    
+                    image = vaedecoder.decode(vae=vae, samples=latent_image, tile_size=512)[0]
+                    resized = scaler.upscale(image=image, upscale_method=upscale_method, scale_by=self.upscales[i])[0]
+                    latent_image = vaeencoder.encode(vae=vae, pixels=resized, tile_size=512, overlap=64)[0]
+                    continue
 
-            if i == iteration_count - 1:
+                if i == iteration_count - 1:
+                    latent_image = common_ksampler(cfg=cfg_init + cfg_step * i,
+                                                denoise=1,
+                                                latent=latent_image,
+                                                positive=positive,
+                                                negative=negative,
+                                                sampler_name=sampler_name,
+                                                scheduler=scheduler,
+                                                model=model,
+                                                seed=noise_seed,
+                                                steps=total_steps,
+                                                start_step=initial_step + each_step_after * (i-1),
+                                                last_step=10000,
+                                                force_full_denoise=True,
+                                                disable_noise=False)[0]
+                    
+                    image = vaedecoder.decode(vae=vae, samples=latent_image, tile_size=512)[0]
+                    resized = scaler.upscale(image=image, upscale_method=upscale_method, scale_by=self.upscales[i])[0]
+                    latent_image = vaeencoder.encode(vae=vae, pixels=resized, tile_size=512, overlap=64)[0]
+                    return (latent_image,)
+
                 latent_image = common_ksampler(cfg=cfg_init + cfg_step * i,
                                             denoise=1,
                                             latent=latent_image,
@@ -190,33 +228,13 @@ class StagedKsampler:
                                             seed=noise_seed,
                                             steps=total_steps,
                                             start_step=initial_step + each_step_after * (i-1),
-                                            last_step=10000,
+                                            last_step=initial_step + each_step_after * i,
                                             force_full_denoise=True,
                                             disable_noise=False)[0]
-                
+                        
                 image = vaedecoder.decode(vae=vae, samples=latent_image, tile_size=512)[0]
                 resized = scaler.upscale(image=image, upscale_method=upscale_method, scale_by=self.upscales[i])[0]
                 latent_image = vaeencoder.encode(vae=vae, pixels=resized, tile_size=512, overlap=64)[0]
-                return (latent_image,)
-
-            latent_image = common_ksampler(cfg=cfg_init + cfg_step * i,
-                                        denoise=1,
-                                        latent=latent_image,
-                                        positive=positive,
-                                        negative=negative,
-                                        sampler_name=sampler_name,
-                                        scheduler=scheduler,
-                                        model=model,
-                                        seed=noise_seed,
-                                        steps=total_steps,
-                                        start_step=initial_step + each_step_after * (i-1),
-                                        last_step=initial_step + each_step_after * i,
-                                        force_full_denoise=True,
-                                        disable_noise=False)[0]
-                    
-            image = vaedecoder.decode(vae=vae, samples=latent_image, tile_size=512)[0]
-            resized = scaler.upscale(image=image, upscale_method=upscale_method, scale_by=self.upscales[i])[0]
-            latent_image = vaeencoder.encode(vae=vae, pixels=resized, tile_size=512, overlap=64)[0]
 
 
 # Register nodes
